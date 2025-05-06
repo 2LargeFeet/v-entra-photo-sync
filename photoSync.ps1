@@ -12,6 +12,21 @@ param(
     [string]$verkadaApiKey
 )
 
+#If containerized attributes exist, use those.
+if (-not [string]::IsNullOrEmpty($env:tenantId)) {
+    $tenantId=$env:tenantId
+    $clientId=$env:clientId
+    $clientSecret=$env:clientSecret
+    $verkadaApiKey=$env:verkadaApiKey
+    }
+
+# === AZURE KEY VAULT SECRETS ===
+
+### If these vars are set, use them instead of vars supplied from the command line.
+
+$secret = Get-AzKeyVaultSecret -VaultName "VerkadaKeys" -Name "VerkadaApiKey"
+$verkadaApiKey = $secret.SecretValueText
+
 $graphScope = "https://graph.microsoft.com/.default"
 $verkadaBaseUrl = "https://api.verkada.com"
 
