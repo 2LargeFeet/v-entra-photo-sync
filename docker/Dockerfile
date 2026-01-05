@@ -1,6 +1,7 @@
 # Use a lightweight base image
 # FROM python:3.9-slim
 FROM mcr.microsoft.com/windows/servercore:ltsc2019
+
 # Set environment variables
 ENV API_KEY=${API_KEY}
 ENV REPO_URL="https://github.com/2LargeFeet/v-entra-photo-sync.git"
