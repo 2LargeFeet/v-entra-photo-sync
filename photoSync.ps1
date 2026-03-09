@@ -18,7 +18,6 @@ $verkadaBaseUrl = "https://api.verkada.com"
 $tempPhotoPath = "entra_photos"
 New-Item -ItemType Directory -Force -Path $tempPhotoPath | Out-Null
 
-# === FUNCTIONS ===
 
 function Get-VerkadaApiToken {
     param ([string]$ApiKey)
@@ -108,11 +107,11 @@ foreach ($user in $verkadaUsers) {
     }
 
     try {
-        Invoke-RestMethod -Method Put -Uri $uploadUrl -Headers $verkadaHeaders -Form $formFields -ContentType "multipart/form-data"
-        Write-Host "Uploaded photo for $email to Verkada"
+        Invoke-RestMethod -Method Put -Uri $uploadUrl -Headers $verkadaHeaders -Form $formFields -ContentType "multipart/form-data" -StatusCodeVariable "httpStatus"
+        Write-Host "Uploaded photo for $email to Verkada and status code is $httpStatus"
     }
     catch {
-        Write-Warning "Failed to upload photo for $email to Verkada"
+        Write-Warning "Failed to upload photo for $email to Verkada and status code is $httpStatus"
     }
 }
 
