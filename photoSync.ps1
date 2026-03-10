@@ -18,7 +18,16 @@ $verkadaBaseUrl = "https://api.verkada.com"
 $tempPhotoPath = "entra_photos"
 New-Item -ItemType Directory -Force -Path $tempPhotoPath | Out-Null
 
+
 # === FUNCTIONS ===
+function Write-Log {
+    param (
+        [string]$Message,
+        [string]$LogPath = "photoSyncLog.txt"
+    )
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $LogPath -Value "[$Timestamp] $Message"
+}
 
 function Get-VerkadaApiToken {
     param ([string]$ApiKey)
@@ -56,11 +65,11 @@ $verkadaHeaders = Get-VerkadaHeaders
 
 Write-Host "Retrieving users from Verkada..."
 $verkadaUsersUrl = "$verkadaBaseUrl/access/v1/access_users"
-$verkadaUsersResponse = Invoke-RestMethod -Uri $verkadaUsersUrl -Method GET -Headers $verkadaHeaders
+$verkadaUsersResponse = Invoke-RestMethod -Uri $verkadaUsersUrl -Method GET -Headers $verkadaHeaders -StatusCodeVariable "getUsersStatus"
 $verkadaUsers = $verkadaUsersResponse.access_members
 
 if (-not $verkadaUsers) {
-    Write-Error "No users retrieved from Verkada!"
+    Write-Log -Message "No users found in Verkada Access Control | Get Users code : $getUsersStatus"
     exit
 }
 
@@ -68,10 +77,10 @@ if (-not $verkadaUsers) {
 
 foreach ($user in $verkadaUsers) {
     if (-not $user.email) {
-        Write-Warning "User $($user.full_name) has no email. Skipping."
+        Write-Log -Message "User $($user.full_name) has no email. Skipping"
+        # Write-Log -Message "User $($user.full_name) has the attributes $user"
         continue
     }
-    Write-Output "processing $user"
 
     $email = $user.email
     Write-Host "Processing $email..."
@@ -79,12 +88,13 @@ foreach ($user in $verkadaUsers) {
     # Look up Entra ID user by email
     $entraUserUrl = "https://graph.microsoft.com/v1.0/users/$email"
     try {
-        $entraUser = Invoke-RestMethod -Uri $entraUserUrl -Headers @{
+        $entraUser = Invoke-RestMethod -Uri $entraUserUrl -StatusCodeVariable "emailStatus" -Headers @{
             Authorization = "Bearer $graphToken"
         }
+        Write-Log -Message "$email email found in Entra ID | Email Status Code : $emailStatus"
     }
     catch {
-        Write-Warning "Could not find Entra ID user for $email"
+        Write-Log -Message "$email email not found in Entra ID | Email Status Code : $emailStatus"
         continue
     }
 
@@ -93,11 +103,11 @@ foreach ($user in $verkadaUsers) {
     $photoPath = Join-Path $tempPhotoPath "$email.jpg"
 
     try {
-        Invoke-RestMethod -Uri $photoUrl -Headers @{ Authorization = "Bearer $graphToken" } -OutFile $photoPath
-        Write-Host "Downloaded photo for $email"
+        Invoke-RestMethod -Uri $photoUrl -Headers @{ Authorization = "Bearer $graphToken" } -OutFile $photoPath -StatusCodeVariable "downloadStatus"
+        Write-Log -Message "$email photo found and downloaded | Download Status Code : $downloadStatus"
     }
     catch {
-        Write-Warning "No photo for $email"
+        Write-Log -Message "$email photo not found | Download Status Code : $downloadStatus"
         continue
     }
 
@@ -108,15 +118,15 @@ foreach ($user in $verkadaUsers) {
     }
 
     try {
-        Invoke-RestMethod -Method Put -Uri $uploadUrl -Headers $verkadaHeaders -Form $formFields -ContentType "multipart/form-data"
-        Write-Host "Uploaded photo for $email to Verkada"
+        Invoke-RestMethod -Method Put -Uri $uploadUrl -Headers $verkadaHeaders -Form $formFields -ContentType "multipart/form-data" -StatusCodeVariable "uploadStatus" 
+        Write-Log -Message "$email photo uploaded successfully | Upload Status Code : $uploadStatus"
     }
     catch {
-        Write-Warning "Failed to upload photo for $email to Verkada"
+        Write-Log -Message "$email photo failed to upload | Upload Status Code : $uploadStatus"
     }
 }
 
 # === STEP 4: Cleanup ===
 
 Remove-Item -Recurse -Force $tempPhotoPath
-Write-Host "Done. All photos processed."
+Write-Log -Message "Finished processing photos"
