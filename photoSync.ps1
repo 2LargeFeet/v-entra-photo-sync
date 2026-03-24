@@ -18,6 +18,8 @@ $verkadaBaseUrl = "https://api.verkada.com"
 $tempPhotoPath = "entra_photos"
 New-Item -ItemType Directory -Force -Path $tempPhotoPath | Out-Null
 
+$maxIterations = 1000
+$iterationCount = 0
 
 # === FUNCTIONS ===
 function Write-Log {
@@ -43,25 +45,24 @@ function Get-VerkadaHeaders {
     }
 }
 
-# === STEP 1: Authenticate ===
-
-# Authenticate to Entra ID (Microsoft Graph)
-Write-Host "Authenticating to Microsoft Graph..."
-$graphTokenUrl = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
-$graphTokenResponse = Invoke-RestMethod -Method Post -Uri $graphTokenUrl -Body @{
-    client_id     = $clientId
-    scope         = $graphScope
-    client_secret = $clientSecret
-    grant_type    = "client_credentials"
+function Get-EntraToken {
+    Write-Host "Authenticating to Microsoft Graph..."
+    $graphTokenUrl = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+    $graphTokenResponse = Invoke-RestMethod -Method Post -Uri $graphTokenUrl -Body @{
+        client_id     = $clientId
+        scope         = $graphScope
+        client_secret = $clientSecret
+        grant_type    = "client_credentials"
+    }
+   $entraToken = $graphTokenResponse.access_token
+   return $entraToken
 }
-$graphToken = $graphTokenResponse.access_token
+$graphToken = Get-EntraToken
 
 # Authenticate to Verkada
 Write-Host "Authenticating to Verkada API..."
 $verkadaApiToken = Get-VerkadaApiToken -ApiKey $verkadaApiKey
 $verkadaHeaders = Get-VerkadaHeaders
-
-# === STEP 2: Get Verkada Users ===
 
 Write-Host "Retrieving users from Verkada..."
 $verkadaUsersUrl = "$verkadaBaseUrl/access/v1/access_users"
@@ -73,12 +74,17 @@ if (-not $verkadaUsers) {
     exit
 }
 
-# === STEP 3: Process Users ===
-
 foreach ($user in $verkadaUsers) {
+    if ($iterationCount -ge $maxIterations) {
+        Write-Host "Threshold reached ($iterationCount iterations, $($stopwatch.Elapsed.Minutes) mins). Re-authenticating..." -ForegroundColor Yellow
+
+        $graphToken = Get-EntraToken
+
+        $iterationCount = 0
+    }
+
     if (-not $user.email) {
         Write-Log -Message "User $($user.full_name) has no email. Skipping"
-        # Write-Log -Message "User $($user.full_name) has the attributes $user"
         continue
     }
 
@@ -124,9 +130,9 @@ foreach ($user in $verkadaUsers) {
     catch {
         Write-Log -Message "$email photo failed to upload | Upload Status Code : $uploadStatus"
     }
+    $iterationCount++
 }
 
-# === STEP 4: Cleanup ===
-
+#Clean Up
 Remove-Item -Recurse -Force $tempPhotoPath
 Write-Log -Message "Finished processing photos"
