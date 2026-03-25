@@ -79,6 +79,8 @@ foreach ($user in $verkadaUsers) {
         Write-Host "Threshold reached ($iterationCount iterations, $($stopwatch.Elapsed.Minutes) mins). Re-authenticating..." -ForegroundColor Yellow
 
         $graphToken = Get-EntraToken
+        $verkadaApiToken = Get-VerkadaApiToken -ApiKey $verkadaApiKey
+        $verkadaHeaders = Get-VerkadaHeaders
 
         $iterationCount = 0
     }
